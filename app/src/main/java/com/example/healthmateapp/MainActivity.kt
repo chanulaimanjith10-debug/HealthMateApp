@@ -21,11 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
 import com.example.healthmateapp.data.HealthDatabase
+import com.example.healthmateapp.data.HealthRecord
 import com.example.healthmateapp.ui.theme.HealthMateAppTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -59,6 +60,10 @@ fun HealthMateApp(
         mutableStateOf("home")
     }
 
+    var selectedRecord by remember {
+        mutableStateOf<HealthRecord?>(null)
+    }
+
     val context = LocalContext.current
 
     val database = remember {
@@ -81,21 +86,33 @@ fun HealthMateApp(
         .maxByOrNull { it.id }
 
     when (screen) {
-        "add" -> {
+        "add", "edit" -> {
+            val currentRecord = selectedRecord.takeIf { screen == "edit" }
+
             AddRecordScreen(
+                modifier = modifier,
+                initialRecord = currentRecord,
                 onBack = {
-                    screen = "home"
+                    screen = if (currentRecord == null) {
+                        "home"
+                    } else {
+                        "records"
+                    }
                 },
                 onSave = { record ->
-                    val oldRecord =
-                        database.getRecordByDate(record.date)
+                    val saved = if (currentRecord == null) {
+                        // Do not add another record for the same date.
+                        val oldRecord =
+                            database.getRecordByDate(record.date)
 
-                    val saved = if (oldRecord == null) {
-                        database.insertRecord(record) != -1L
+                        if (oldRecord == null) {
+                            database.insertRecord(record) != -1L
+                        } else {
+                            false
+                        }
                     } else {
-                        database.updateRecord(
-                            record.copy(id = oldRecord.id)
-                        ) > 0
+                        // Update the selected record.
+                        database.updateRecord(record) > 0
                     }
 
                     if (saved) {
@@ -107,6 +124,24 @@ fun HealthMateApp(
             )
         }
 
+        "records" -> {
+            HealthRecordListScreen(
+                records = records,
+                modifier = modifier,
+                onBack = {
+                    screen = "home"
+                },
+                onEdit = { record ->
+                    selectedRecord = record
+                    screen = "edit"
+                },
+                onDelete = { id ->
+                    database.deleteRecord(id)
+                    records = database.getAllRecords()
+                }
+            )
+        }
+
         else -> {
             DashboardScreen(
                 modifier = modifier,
@@ -114,7 +149,12 @@ fun HealthMateApp(
                 calories = todayRecord?.calories ?: 0,
                 water = todayRecord?.water ?: 0,
                 onAddRecord = {
+                    selectedRecord = null
                     screen = "add"
+                },
+                onViewRecords = {
+                    records = database.getAllRecords()
+                    screen = "records"
                 }
             )
         }
@@ -127,7 +167,8 @@ fun DashboardScreen(
     steps: Int,
     calories: Int,
     water: Int,
-    onAddRecord: () -> Unit
+    onAddRecord: () -> Unit,
+    onViewRecords: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -177,7 +218,7 @@ fun DashboardScreen(
         }
 
         Button(
-            onClick = {},
+            onClick = onViewRecords,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("View Records")
@@ -222,7 +263,8 @@ fun DashboardPreview() {
             steps = 0,
             calories = 0,
             water = 0,
-            onAddRecord = {}
+            onAddRecord = {},
+            onViewRecords = {}
         )
     }
 }

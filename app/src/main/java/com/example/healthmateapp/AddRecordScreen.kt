@@ -27,22 +27,24 @@ import java.util.Locale
 
 @Composable
 fun AddRecordScreen(
+    modifier: Modifier = Modifier,
+    initialRecord: HealthRecord? = null,
     onBack: () -> Unit,
     onSave: (HealthRecord) -> Boolean
 ) {
-    var steps by remember {
-        mutableStateOf("")
+    var steps by remember(initialRecord) {
+        mutableStateOf(initialRecord?.steps?.toString() ?: "")
     }
 
-    var calories by remember {
-        mutableStateOf("")
+    var calories by remember(initialRecord) {
+        mutableStateOf(initialRecord?.calories?.toString() ?: "")
     }
 
-    var water by remember {
-        mutableStateOf("")
+    var water by remember(initialRecord) {
+        mutableStateOf(initialRecord?.water?.toString() ?: "")
     }
 
-    var message by remember {
+    var message by remember(initialRecord) {
         mutableStateOf("")
     }
 
@@ -53,21 +55,25 @@ fun AddRecordScreen(
         ).format(Date())
     }
 
+    val recordDate = initialRecord?.date ?: today
+
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Add Health Record",
+            text = if (initialRecord == null) {
+                "Add Health Record"
+            } else {
+                "Edit Health Record"
+            },
             style = MaterialTheme.typography.headlineSmall
         )
 
-        Text(
-            text = "Date: $today"
-        )
+        Text(text = "Date: $recordDate")
 
         OutlinedTextField(
             value = steps,
@@ -132,23 +138,37 @@ fun AddRecordScreen(
 
                     else -> {
                         val record = HealthRecord(
-                            date = today,
+                            id = initialRecord?.id ?: 0,
+                            date = recordDate,
                             steps = stepsValue,
                             calories = caloriesValue,
                             water = waterValue
                         )
 
-                        if (onSave(record)) {
-                            "Record saved."
-                        } else {
-                            "Could not save record."
+                        val saved = onSave(record)
+
+                        when {
+                            saved && initialRecord == null ->
+                                "Record saved."
+
+                            saved ->
+                                "Record updated."
+
+                            else ->
+                                "This date already has a record. Edit it from View Records."
                         }
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save Record")
+            Text(
+                text = if (initialRecord == null) {
+                    "Save Record"
+                } else {
+                    "Update Record"
+                }
+            )
         }
 
         if (message.isNotEmpty()) {

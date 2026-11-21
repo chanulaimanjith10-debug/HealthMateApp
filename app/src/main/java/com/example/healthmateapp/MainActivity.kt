@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.example.healthmateapp.data.HealthDatabase
 import com.example.healthmateapp.data.HealthRecord
 import com.example.healthmateapp.ui.theme.HealthMateAppTheme
+import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -63,6 +64,37 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HealthMateApp(
     modifier: Modifier = Modifier
+) {
+    val auth = remember {
+        FirebaseAuth.getInstance()
+    }
+
+    var isLoggedIn by remember {
+        mutableStateOf(auth.currentUser != null)
+    }
+
+    if (isLoggedIn) {
+        HealthMateContent(
+            modifier = modifier,
+            onLogout = {
+                auth.signOut()
+                isLoggedIn = false
+            }
+        )
+    } else {
+        LoginScreen(
+            modifier = modifier,
+            onLoginSuccess = {
+                isLoggedIn = true
+            }
+        )
+    }
+}
+
+@Composable
+fun HealthMateContent(
+    modifier: Modifier = Modifier,
+    onLogout: () -> Unit
 ) {
     var screen by remember {
         mutableStateOf("home")
@@ -166,7 +198,8 @@ fun HealthMateApp(
                 onViewRecords = {
                     records = database.getAllRecords()
                     screen = "records"
-                }
+                },
+                onLogout = onLogout
             )
         }
     }
@@ -180,7 +213,8 @@ fun DashboardScreen(
     water: Int,
     recentRecords: List<HealthRecord>,
     onAddRecord: () -> Unit,
-    onViewRecords: () -> Unit
+    onViewRecords: () -> Unit,
+    onLogout: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -237,6 +271,13 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("View Records")
+        }
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Log Out")
         }
     }
 }
@@ -402,7 +443,8 @@ fun DashboardPreview() {
             water = 0,
             recentRecords = emptyList(),
             onAddRecord = {},
-            onViewRecords = {}
+            onViewRecords = {},
+            onLogout = {}
         )
     }
 }

@@ -158,9 +158,11 @@ fun LoginScreen(
                             if (result.isSuccessful) {
                                 onLoginSuccess()
                             } else {
-                                message = result.exception
-                                    ?.localizedMessage
-                                    ?: "Sign in failed. Check your details."
+                                message = if (isSignUp) {
+                                    "Couldn't create your account. Check your email and password, then try again."
+                                } else {
+                                    "Email or password is incorrect. Please try again."
+                                }
                             }
                         }
                     }

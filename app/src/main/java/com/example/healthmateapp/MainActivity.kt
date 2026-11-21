@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -47,13 +46,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        val preferences =
+            getSharedPreferences("healthmate_settings", MODE_PRIVATE)
+
         setContent {
-            HealthMateAppTheme {
+            var darkMode by remember {
+                mutableStateOf(
+                    preferences.getBoolean("dark_mode", false)
+                )
+            }
+
+            HealthMateAppTheme(darkTheme = darkMode) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
                     HealthMateApp(
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
+                        darkMode = darkMode,
+                        onDarkModeChange = { enabled ->
+                            darkMode = enabled
+                            preferences.edit()
+                                .putBoolean("dark_mode", enabled)
+                                .apply()
+                        }
                     )
                 }
             }
@@ -63,7 +78,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HealthMateApp(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit
 ) {
     val auth = remember {
         FirebaseAuth.getInstance()
@@ -76,6 +93,8 @@ fun HealthMateApp(
     if (isLoggedIn) {
         HealthMateContent(
             modifier = modifier,
+            darkMode = darkMode,
+            onDarkModeChange = onDarkModeChange,
             onLogout = {
                 auth.signOut()
                 isLoggedIn = false
@@ -94,6 +113,8 @@ fun HealthMateApp(
 @Composable
 fun HealthMateContent(
     modifier: Modifier = Modifier,
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
     onLogout: () -> Unit
 ) {
     var screen by remember {
@@ -115,92 +136,113 @@ fun HealthMateContent(
     }
 
     val today = remember {
-        SimpleDateFormat(
-            "yyyy-MM-dd",
-            Locale.US
-        ).format(Date())
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
     }
 
     val todayRecord = records
-        .filter { it.date == today }
-        .maxByOrNull { it.id }
+        .filter { record -> record.date == today }
+        .maxByOrNull { record -> record.id }
 
-    when (screen) {
-        "add", "edit" -> {
-            val currentRecord = selectedRecord.takeIf {
-                screen == "edit"
-            }
-
-            AddRecordScreen(
-                modifier = modifier,
-                initialRecord = currentRecord,
-                onBack = {
-                    screen = if (currentRecord == null) {
-                        "home"
-                    } else {
-                        "records"
-                    }
-                },
-                onSave = { record ->
-                    val saved = if (currentRecord == null) {
-                        // Do not add another record for the same date.
-                        val oldRecord =
-                            database.getRecordByDate(record.date)
-
-                        if (oldRecord == null) {
-                            database.insertRecord(record) != -1L
-                        } else {
-                            false
-                        }
-                    } else {
-                        // Update the selected record.
-                        database.updateRecord(record) > 0
-                    }
-
-                    if (saved) {
+    Scaffold(
+        modifier = modifier,
+        bottomBar = {
+            HealthMateBottomBar(
+                selectedScreen = screen,
+                onNavigate = { destination ->
+                    if (destination == "records") {
                         records = database.getAllRecords()
                     }
 
-                    saved
+                    if (destination == "add") {
+                        selectedRecord = null
+                    }
+
+                    screen = destination
                 }
             )
         }
+    ) { contentPadding ->
 
-        "records" -> {
-            HealthRecordListScreen(
-                records = records,
-                modifier = modifier,
-                onBack = {
-                    screen = "home"
-                },
-                onEdit = { record ->
-                    selectedRecord = record
-                    screen = "edit"
-                },
-                onDelete = { id ->
-                    database.deleteRecord(id)
-                    records = database.getAllRecords()
+        when (screen) {
+            "add", "edit" -> {
+                val currentRecord = selectedRecord.takeIf {
+                    screen == "edit"
                 }
-            )
-        }
 
-        else -> {
-            DashboardScreen(
-                modifier = modifier,
-                steps = todayRecord?.steps ?: 0,
-                calories = todayRecord?.calories ?: 0,
-                water = todayRecord?.water ?: 0,
-                recentRecords = records,
-                onAddRecord = {
-                    selectedRecord = null
-                    screen = "add"
-                },
-                onViewRecords = {
-                    records = database.getAllRecords()
-                    screen = "records"
-                },
-                onLogout = onLogout
-            )
+                AddRecordScreen(
+                    modifier = Modifier.padding(contentPadding),
+                    initialRecord = currentRecord,
+                    onSave = { record ->
+                        val saved = if (currentRecord == null) {
+                            val oldRecord =
+                                database.getRecordByDate(record.date)
+
+                            if (oldRecord == null) {
+                                database.insertRecord(record) != -1L
+                            } else {
+                                false
+                            }
+                        } else {
+                            database.updateRecord(record) > 0
+                        }
+
+                        if (saved) {
+                            records = database.getAllRecords()
+                        }
+
+                        saved
+                    }
+                )
+            }
+
+            "records" -> {
+                HealthRecordListScreen(
+                    records = records,
+                    modifier = Modifier.padding(contentPadding),
+                    onBack = {
+                        screen = "home"
+                    },
+                    onEdit = { record ->
+                        selectedRecord = record
+                        screen = "edit"
+                    },
+                    onDelete = { id ->
+                        database.deleteRecord(id)
+                        records = database.getAllRecords()
+                    }
+                )
+            }
+
+            "profile" -> {
+                ProfileScreen(
+                    modifier = Modifier.padding(contentPadding),
+                    darkMode = darkMode,
+                    onDarkModeChange = onDarkModeChange,
+                    onAboutClick = {
+                        screen = "about"
+                    },
+                    onLogoutClick = onLogout
+                )
+            }
+
+            "about" -> {
+                AboutScreen(
+                    modifier = Modifier.padding(contentPadding),
+                    onBackClick = {
+                        screen = "profile"
+                    }
+                )
+            }
+
+            else -> {
+                DashboardScreen(
+                    modifier = Modifier.padding(contentPadding),
+                    steps = todayRecord?.steps ?: 0,
+                    calories = todayRecord?.calories ?: 0,
+                    water = todayRecord?.water ?: 0,
+                    recentRecords = records
+                )
+            }
         }
     }
 }
@@ -211,10 +253,7 @@ fun DashboardScreen(
     steps: Int,
     calories: Int,
     water: Int,
-    recentRecords: List<HealthRecord>,
-    onAddRecord: () -> Unit,
-    onViewRecords: () -> Unit,
-    onLogout: () -> Unit
+    recentRecords: List<HealthRecord>
 ) {
     Column(
         modifier = modifier
@@ -258,27 +297,6 @@ fun DashboardScreen(
         )
 
         StepsChart(records = recentRecords)
-
-        Button(
-            onClick = onAddRecord,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Add Record")
-        }
-
-        Button(
-            onClick = onViewRecords,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("View Records")
-        }
-
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Log Out")
-        }
     }
 }
 
@@ -296,8 +314,8 @@ fun StepsChart(records: List<HealthRecord>) {
         }
     }
 
-    val stepsByDate = records.associate {
-        it.date to it.steps
+    val stepsByDate = records.associate { record ->
+        record.date to record.steps
     }
 
     val values = days.map { date ->
@@ -311,9 +329,7 @@ fun StepsChart(records: List<HealthRecord>) {
     val lineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
 
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -352,18 +368,14 @@ fun StepsChart(records: List<HealthRecord>) {
                     val x = left +
                             chartWidth * index / (values.size - 1).toFloat()
 
-                    val y = bottom -
-                            (value / maxSteps) * chartHeight
+                    val y = bottom - (value / maxSteps) * chartHeight
 
                     Offset(x, y)
                 }
 
                 if (points.size > 1) {
                     val path = Path().apply {
-                        moveTo(
-                            points.first().x,
-                            points.first().y
-                        )
+                        moveTo(points.first().x, points.first().y)
 
                         points.drop(1).forEach { point ->
                             lineTo(point.x, point.y)
@@ -392,10 +404,7 @@ fun StepsChart(records: List<HealthRecord>) {
             ) {
                 days.forEach { date ->
                     Text(
-                        text = SimpleDateFormat(
-                            "d",
-                            Locale.US
-                        ).format(date),
+                        text = SimpleDateFormat("d", Locale.US).format(date),
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
@@ -410,9 +419,7 @@ fun HealthMetricCard(
     value: String,
     unit: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -441,10 +448,7 @@ fun DashboardPreview() {
             steps = 0,
             calories = 0,
             water = 0,
-            recentRecords = emptyList(),
-            onAddRecord = {},
-            onViewRecords = {},
-            onLogout = {}
+            recentRecords = emptyList()
         )
     }
 }

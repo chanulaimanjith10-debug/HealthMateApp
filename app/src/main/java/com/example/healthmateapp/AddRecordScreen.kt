@@ -29,7 +29,6 @@ import java.util.Locale
 fun AddRecordScreen(
     modifier: Modifier = Modifier,
     initialRecord: HealthRecord? = null,
-    onBack: () -> Unit,
     onSave: (HealthRecord) -> Boolean
 ) {
     var steps by remember(initialRecord) {
@@ -175,11 +174,5 @@ fun AddRecordScreen(
             Text(text = message)
         }
 
-        Button(
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Back")
-        }
     }
 }
